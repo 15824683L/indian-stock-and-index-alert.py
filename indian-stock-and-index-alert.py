@@ -57,6 +57,8 @@ def fetch_data(symbol, tf):
 def liquidity_grab_order_block_vwap(df):
     df['high_shift'] = df['high'].shift(1)
     df['low_shift'] = df['low'].shift(1)
+    df.dropna(inplace=True)  # FIX: Remove rows with NaN from shift
+
     liquidity_grab = (df['high'] > df['high_shift']) & (df['low'] < df['low_shift'])
     order_block = df['close'] > df['open']
     price_above_vwap = df['close'] > df['vwap']
@@ -75,7 +77,6 @@ def liquidity_grab_order_block_vwap(df):
         tsl = round(entry - (sl - entry) * 1.5, 2)
         return "SELL", entry, sl, tp, tsl, "\U0001F534"
     return "NO SIGNAL", None, None, None, None, None
-
 while True:
     signal_found = False
 
