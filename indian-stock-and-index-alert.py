@@ -60,10 +60,12 @@ def liquidity_grab_order_block_vwap(df):
     df.dropna(inplace=True)
 
     # index মেলানো হচ্ছে
-    high_aligned, high_shift_aligned = df['high'].align(df['high_shift'], join='inner')
-    low_aligned, low_shift_aligned = df['low'].align(df['low_shift'], join='inner')
-    
-    liquidity_grab = (high_aligned > high_shift_aligned) & (low_aligned < low_shift_aligned)
+    high_aligned, high_shift_aligned = df['high'].align(df['high_shift'], join='inner', axis=0)
+low_aligned, low_shift_aligned = df['low'].align(df['low_shift'], join='inner', axis=0)
+
+liquidity_grab = (high_aligned > high_shift_aligned) & (low_aligned < low_shift_aligned)
+
+df = df.loc[liquidity_grab.index]
 
     # মূল ডেটাফ্রেমে শুধু সেই সারিগুলো রাখছি যেগুলোর index মিলে গেছে
     df = df.loc[liquidity_grab.index]
