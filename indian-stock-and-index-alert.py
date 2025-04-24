@@ -59,14 +59,9 @@ def liquidity_grab_order_block_vwap(df):
     df['low_shift'] = df['low'].shift(1)
     df.dropna(inplace=True)
 
-    # index মেলানো হচ্ছে
-    high_aligned, high_shift_aligned = df['high'].align(df['high_shift'], join='inner', axis=0)
-    low_aligned, low_shift_aligned = df['low'].align(df['low_shift'], join='inner', axis=0)
+    liquidity_grab = (df['high'] > df['high_shift']) & (df['low'] < df['low_shift'])
 
-    liquidity_grab = (high_aligned > high_shift_aligned) & (low_aligned < low_shift_aligned)
-
-    # মূল ডেটাফ্রেমে শুধু সেই সারিগুলো রাখছি যেগুলোর index মিলে গেছে
-    df = df.loc[liquidity_grab.index]
+    df = df[liquidity_grab]
 
     if df.empty:
         return "NO SIGNAL", None, None, None, None, None
@@ -76,7 +71,7 @@ def liquidity_grab_order_block_vwap(df):
     price_below_vwap = df['close'] < df['vwap']
 
     # BUY সিগন্যাল
-    if liquidity_grab.iloc[-1] and order_block.iloc[-1] and price_above_vwap.iloc[-1]:
+    if order_block.iloc[-1] and price_above_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['low'].iloc[-2], 2)
         tp = round(entry + (entry - sl) * 2, 2)
@@ -84,7 +79,7 @@ def liquidity_grab_order_block_vwap(df):
         return "BUY", entry, sl, tp, tsl, "🟢"
 
     # SELL সিগন্যাল
-    elif liquidity_grab.iloc[-1] and not order_block.iloc[-1] and price_below_vwap.iloc[-1]:
+    elif not order_block.iloc[-1] and price_below_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['high'].iloc[-2], 2)
         tp = round(entry - (sl - entry) * 2, 2)
