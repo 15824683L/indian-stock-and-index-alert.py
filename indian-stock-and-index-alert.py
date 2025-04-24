@@ -61,11 +61,9 @@ def liquidity_grab_order_block_vwap(df):
 
     # index মেলানো হচ্ছে
     high_aligned, high_shift_aligned = df['high'].align(df['high_shift'], join='inner', axis=0)
-low_aligned, low_shift_aligned = df['low'].align(df['low_shift'], join='inner', axis=0)
+    low_aligned, low_shift_aligned = df['low'].align(df['low_shift'], join='inner', axis=0)
 
-liquidity_grab = (high_aligned > high_shift_aligned) & (low_aligned < low_shift_aligned)
-
-df = df.loc[liquidity_grab.index]
+    liquidity_grab = (high_aligned > high_shift_aligned) & (low_aligned < low_shift_aligned)
 
     # মূল ডেটাফ্রেমে শুধু সেই সারিগুলো রাখছি যেগুলোর index মিলে গেছে
     df = df.loc[liquidity_grab.index]
@@ -93,7 +91,7 @@ df = df.loc[liquidity_grab.index]
         tsl = round(entry - (sl - entry) * 1.5, 2)
         return "SELL", entry, sl, tp, tsl, "🔴"
 
-    return "NO SIGNAL", None, None, None, None, None, None
+    return "NO SIGNAL", None, None, None, None, None
 while True:
     signal_found = False
 
