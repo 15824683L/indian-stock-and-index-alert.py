@@ -19,7 +19,7 @@ TELEGRAM_BOT_TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 TELEGRAM_CHAT_ID = ""  # Optional personal ID
 TELEGRAM_GROUP_CHAT_ID = "-1002689167916"
 
-# Stock List (add more if needed)
+# Stock List
 INDIAN_STOCKS = [
     "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
     "HINDUNILVR.NS", "LT.NS", "SBIN.NS", "KOTAKBANK.NS", "ITC.NS"
@@ -79,7 +79,6 @@ def liquidity_grab_order_block_vwap(df):
     price_above_vwap = df['close'] > df['vwap']
     price_below_vwap = df['close'] < df['vwap']
 
-    # BUY Signal
     if order_block.iloc[-1] and price_above_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['low'].iloc[-2], 2)
@@ -87,7 +86,6 @@ def liquidity_grab_order_block_vwap(df):
         tsl = round(entry + (entry - sl) * 1.5, 2)
         return "BUY", entry, sl, tp, tsl, "🟢"
 
-    # SELL Signal
     elif not order_block.iloc[-1] and price_below_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['high'].iloc[-2], 2)
@@ -134,14 +132,14 @@ while True:
         for label, tf in timeframes.items():
             df = fetch_data(stock, tf)
             if df is not None and not df.empty:
-    signal, entry, sl, tp, tsl, emoji = liquidity_grab_order_block_vwap(df)
-    if signal != "NO SIGNAL":
-        signal_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        msg = (
-            f"{emoji} *{signal} Signal for {stock}*\n"
-            f"Type: {label}\nTimeframe: {tf}\nTime: `{signal_time}`\n"
-            f"Entry: `{entry}`\nSL: `{sl}`\nTP: `{tp}`\nTSL: `{tsl}`"
-        )
+                signal, entry, sl, tp, tsl, emoji = liquidity_grab_order_block_vwap(df)
+                if signal != "NO SIGNAL":
+                    signal_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    msg = (
+                        f"{emoji} *{signal} Signal for {stock}*\n"
+                        f"Type: {label}\nTimeframe: {tf}\nTime: `{signal_time}`\n"
+                        f"Entry: `{entry}`\nSL: `{sl}`\nTP: `{tp}`\nTSL: `{tsl}`"
+                    )
                     send_telegram_message(msg, TELEGRAM_GROUP_CHAT_ID)
 
                     active_trades[stock] = {
