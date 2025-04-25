@@ -73,7 +73,7 @@ def strategy(df):
     prev_row = df.iloc[-2]
 
     # Liquidity Grab: Wick extends above or below previous
-    liquidity = last_row['high'] > prev_row['high'] and last_row['low'] < prev_row['low']
+    liquidity = (last_row['high'] > prev_row['high']) and (last_row['low'] < prev_row['low'])
 
     if not liquidity:
         return "NO SIGNAL", None, None, None, None, None
