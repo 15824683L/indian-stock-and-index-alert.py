@@ -73,25 +73,26 @@ def strategy(df):
 
  # Liquidity Grab: Wick extends above or below previous
 liquidity = ((last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low'])).all()
-    if liquidity:
-        # অর্ডার ব্লক লজিক
-        is_bullish_block = last_row['close'] > last_row['open']
-        is_bearish_block = last_row['close'] < last_row['open']
 
-        # VWAP শর্ত
-        if is_bullish_block and last_row['close'] > last_row['vwap']:
-            entry = round(last_row['close'], 2)
-            sl = round(prev_row['low'], 2)
-            tp = round(entry + (entry - sl) * 2, 2)
-            tsl = round(entry + (entry - sl) * 1.5, 2)
-            return "BUY", entry, sl, tp, tsl, "🟢"
+if liquidity:
+    # Order Block Logic
+    is_bullish_block = last_row['close'] > last_row['open']
+    is_bearish_block = last_row['close'] < last_row['open']
 
-        elif is_bearish_block and last_row['close'] < last_row['vwap']:
-            entry = round(last_row['close'], 2)
-            sl = round(prev_row['high'], 2)
-            tp = round(entry - (sl - entry) * 2, 2)
-            tsl = round(entry - (sl - entry) * 1.5, 2)
-            return "SELL", entry, sl, tp, tsl, "🔴"
+    # VWAP Conditions
+    if is_bullish_block and last_row['close'] > last_row['vwap']:
+        entry = round(last_row['close'], 2)
+        sl = round(prev_row['low'], 2)
+        tp = round(entry + (entry - sl) * 2, 2)
+        tsl = round(entry + (entry - sl) * 1.5, 2)
+        return "BUY", entry, sl, tp, tsl, "🟢"
+
+    elif is_bearish_block and last_row['close'] < last_row['vwap']:
+        entry = round(last_row['close'], 2)
+        sl = round(prev_row['high'], 2)
+        tp = round(entry - (sl - entry) * 2, 2)
+        tsl = round(entry - (sl - entry) * 1.5, 2)
+        return "SELL", entry, sl, tp, tsl, "🔴"
 
     return "NO SIGNAL", None, None, None, None, None
 # Main Bot Loop
