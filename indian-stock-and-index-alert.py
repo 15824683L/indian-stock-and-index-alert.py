@@ -62,8 +62,7 @@ def fetch_data(symbol, tf):
     except Exception as e:
         logging.error(f"{symbol} fetch error: {e}")
         return None
-
-# Strategy: Liquidity Grab + Order Block + VWAP
+# কৌশল: লিকুইডিটি গ্র্যাব + অর্ডার ব্লক + VWAP
 def strategy(df):
     df['high_prev'] = df['high'].shift(1)
     df['low_prev'] = df['low'].shift(1)
@@ -72,15 +71,15 @@ def strategy(df):
     last_row = df.iloc[-1]
     prev_row = df.iloc[-2]
 
-    # Liquidity Grab: Wick extends above or below previous
-    liquidity = (last_row['high'] > prev_row['high']) and (last_row['low'] < prev_row['low'])
+    # লিকুইডিটি গ্র্যাব: উইকটি পূর্ববর্তী থেকে উপরে বা নিচে বিস্তৃত
+    liquidity = (last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low'])
 
     if liquidity:
-        # Order Block Logic
+        # অর্ডার ব্লক লজিক
         is_bullish_block = last_row['close'] > last_row['open']
         is_bearish_block = last_row['close'] < last_row['open']
 
-        # VWAP Conditions
+        # VWAP শর্ত
         if is_bullish_block and last_row['close'] > last_row['vwap']:
             entry = round(last_row['close'], 2)
             sl = round(prev_row['low'], 2)
