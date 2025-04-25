@@ -97,7 +97,7 @@ kolkata_tz = pytz.timezone("Asia/Kolkata")
 while True:
     signal_found = False
 
-    for stock in INDICES:
+    for stock:
         if stock in active_trades:
             df = fetch_data(stock, "15m")
             if df is not None and not df.empty:
