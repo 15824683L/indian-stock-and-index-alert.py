@@ -73,8 +73,7 @@ def strategy(df):
     prev_row = df.iloc[-2]
 
     # Liquidity Grab: Wick extends above or below previous
-    liquidity = ((last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low']))
-
+    liquidity = (last_row['high'] > prev_row['high']) and (last_row['low'] < prev_row['low'])
     if liquidity:
         # Order Block Logic
         is_bullish_block = last_row['close'] > last_row['open']
