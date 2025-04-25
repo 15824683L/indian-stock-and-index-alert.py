@@ -62,6 +62,7 @@ def fetch_data(symbol, tf):
     except Exception as e:
         logging.error(f"{symbol} fetch error: {e}")
         return None
+
 # কৌশল: লিকুইডিটি গ্র্যাব + অর্ডার ব্লক + VWAP
 def strategy(df):
     df['high_prev'] = df['high'].shift(1)
@@ -71,30 +72,31 @@ def strategy(df):
     last_row = df.iloc[-1]
     prev_row = df.iloc[-2]
 
- # Liquidity Grab: Wick extends above or below previous
-liquidity = ((last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low'])).all()
+    # Liquidity Grab: Wick extends above or below previous
+    liquidity = ((last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low']))
 
-if liquidity:
-    # Order Block Logic
-    is_bullish_block = last_row['close'] > last_row['open']
-    is_bearish_block = last_row['close'] < last_row['open']
+    if liquidity:
+        # Order Block Logic
+        is_bullish_block = last_row['close'] > last_row['open']
+        is_bearish_block = last_row['close'] < last_row['open']
 
-    # VWAP Conditions
-    if is_bullish_block and last_row['close'] > last_row['vwap']:
-        entry = round(last_row['close'], 2)
-        sl = round(prev_row['low'], 2)
-        tp = round(entry + (entry - sl) * 2, 2)
-        tsl = round(entry + (entry - sl) * 1.5, 2)
-        return "BUY", entry, sl, tp, tsl, "🟢"
+        # VWAP Conditions
+        if is_bullish_block and last_row['close'] > last_row['vwap']:
+            entry = round(last_row['close'], 2)
+            sl = round(prev_row['low'], 2)
+            tp = round(entry + (entry - sl) * 2, 2)
+            tsl = round(entry + (entry - sl) * 1.5, 2)
+            return "BUY", entry, sl, tp, tsl, "🟢"
 
-    elif is_bearish_block and last_row['close'] < last_row['vwap']:
-        entry = round(last_row['close'], 2)
-        sl = round(prev_row['high'], 2)
-        tp = round(entry - (sl - entry) * 2, 2)
-        tsl = round(entry - (sl - entry) * 1.5, 2)
-        return "SELL", entry, sl, tp, tsl, "🔴"
+        elif is_bearish_block and last_row['close'] < last_row['vwap']:
+            entry = round(last_row['close'], 2)
+            sl = round(prev_row['high'], 2)
+            tp = round(entry - (sl - entry) * 2, 2)
+            tsl = round(entry - (sl - entry) * 1.5, 2)
+            return "SELL", entry, sl, tp, tsl, "🔴"
 
     return "NO SIGNAL", None, None, None, None, None
+
 # Main Bot Loop
 while True:
     for symbol in INDIAN_STOCKS:
