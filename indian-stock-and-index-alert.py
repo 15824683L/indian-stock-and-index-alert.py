@@ -71,9 +71,8 @@ def strategy(df):
     last_row = df.iloc[-1]
     prev_row = df.iloc[-2]
 
-    # লিকুইডিটি গ্র্যাব: উইকটি পূর্ববর্তী থেকে উপরে বা নিচে বিস্তৃত
-    liquidity = (last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low'])
-
+ # Liquidity Grab: Wick extends above or below previous
+liquidity = ((last_row['high'] > prev_row['high']) & (last_row['low'] < prev_row['low'])).all()
     if liquidity:
         # অর্ডার ব্লক লজিক
         is_bullish_block = last_row['close'] > last_row['open']
