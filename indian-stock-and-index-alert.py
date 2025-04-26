@@ -56,7 +56,7 @@ def send_telegram_message(message, chat_id):
 
 # Data fetcher
 def fetch_data(symbol, tf):
-    interval_map = {"15m": "15m", "30m": "30m", "1h": "60m", "1d": "1d"}
+    interval_map = {"15m": "15m", "30m": "30m"}
     try:
         df = yf.download(tickers=symbol, period="2d", interval=interval_map[tf])
         df.reset_index(inplace=True)
