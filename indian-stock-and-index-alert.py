@@ -35,9 +35,7 @@ ALL_SYMBOLS = INDIAN_STOCKS
 
 timeframes = {
     "Intraday 15m": "15m",
-    "Intraday 30m": "30m",
-    "Swing": "1h",
-    "Position": "1d"
+    "Intraday 30m": "30m"
 }
 
 active_trades = {}
@@ -71,19 +69,27 @@ def fetch_data(symbol, tf):
         return None
 
 # Strategy Logic
-def liquidity_grab_order_block(df):
+def calculate_vwap(df):
+    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    return df
+
+def liquidity_grab_order_block_with_vwap(df):
+    df = calculate_vwap(df)
+
     df['high_shift'] = df['high'].shift(1)
     df['low_shift'] = df['low'].shift(1)
     liquidity_grab = (df['high'] > df['high_shift']) & (df['low'] < df['low_shift'])
     order_block = df['close'] > df['open']
+    close_above_vwap = df['close'] > df['vwap']
+    close_below_vwap = df['close'] < df['vwap']
 
-    if liquidity_grab.iloc[-1] and order_block.iloc[-1]:
+    if liquidity_grab.iloc[-1] and order_block.iloc[-1] and close_above_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['low'].iloc[-2], 2)
         tp = round(entry + (entry - sl) * 2, 2)
         tsl = round(entry + (entry - sl) * 1.5, 2)
         return "BUY", entry, sl, tp, tsl, "\U0001F7E2"
-    elif liquidity_grab.iloc[-1] and not order_block.iloc[-1]:
+    elif liquidity_grab.iloc[-1] and not order_block.iloc[-1] and close_below_vwap.iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['high'].iloc[-2], 2)
         tp = round(entry - (sl - entry) * 2, 2)
@@ -122,7 +128,7 @@ while True:
         for label, tf in timeframes.items():
             df = fetch_data(stock, tf)
             if df is not None and not df.empty:
-                signal, entry, sl, tp, tsl, emoji = liquidity_grab_order_block(df)
+                signal, entry, sl, tp, tsl, emoji = liquidity_grab_order_block_with_vwap(df)
                 if signal != "NO SIGNAL":
                     signal_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
                     msg = (
