@@ -58,11 +58,9 @@ def check_liquidity_bos(df):
     df['prev_high'] = df['high'].shift(1)
     df['prev_low'] = df['low'].shift(1)
 
-    # Liquidity Grab
     grab_high = df['high'] > df['prev_high']
     grab_low = df['low'] < df['prev_low']
 
-    # BOS: Current close > previous high for buy, or close < previous low for sell
     if grab_low.iloc[-2] and df['close'].iloc[-1] > df['high'].iloc[-2] and df['close'].iloc[-1] > df['vwap'].iloc[-1]:
         entry = df['close'].iloc[-1]
         sl = df['low'].iloc[-2]
@@ -84,34 +82,42 @@ def log_signal(stock, tf, signal, entry, sl, tp):
 while True:
     for stock in STOCKS:
         for tf in TIMEFRAMES:
-            if stock in active_trades:
-                df = fetch_data(stock, tf)
-                if df is not None and not df.empty:
+            key = f"{stock}_{tf}"  # ইউনিক কী তৈরি স্টক + টাইমফ্রেম ভিত্তিতে
+
+            df = fetch_data(stock, tf)
+            if df is not None and not df.empty:
+                # ট্রেড সক্রিয় থাকলে TP/SL চেক করা হবে
+                if key in active_trades:
                     last_price = df['close'].iloc[-1]
-                    trade = active_trades[stock]
+                    trade = active_trades[key]
                     now_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M')
 
                     if trade['type'] == "BUY" and last_price >= trade['tp']:
                         send_telegram_message(f"✅ TP HIT for {stock} [{tf}] at {last_price} ({now_time})")
-                        del active_trades[stock]
+                        del active_trades[key]
                     elif trade['type'] == "BUY" and last_price <= trade['sl']:
                         send_telegram_message(f"❌ SL HIT for {stock} [{tf}] at {last_price} ({now_time})")
-                        del active_trades[stock]
+                        del active_trades[key]
                     elif trade['type'] == "SELL" and last_price <= trade['tp']:
                         send_telegram_message(f"✅ TP HIT for {stock} [{tf}] at {last_price} ({now_time})")
-                        del active_trades[stock]
+                        del active_trades[key]
                     elif trade['type'] == "SELL" and last_price >= trade['sl']:
                         send_telegram_message(f"❌ SL HIT for {stock} [{tf}] at {last_price} ({now_time})")
-                        del active_trades[stock]
-                continue
+                        del active_trades[key]
+                    continue
 
-            df = fetch_data(stock, tf)
-            if df is not None and not df.empty:
+                # নতুন সিগন্যাল চেক করা হচ্ছে
                 signal, entry, sl, tp = check_liquidity_bos(df)
+
+                # Duplicate checker: আগের মতই সিগন্যাল থাকলে স্কিপ করুন
                 if signal != "NO":
+                    if key in active_trades and active_trades[key]['type'] == signal:
+                        continue  # ডুপ্লিকেট সিগন্যাল
+
                     now = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
-                    msg = f"**{signal} Signal for {stock} [{tf}]**\nTime: `{now}`\nEntry: `{entry}`\nSL: `{sl}`\nTP: `{tp}`"
+                    msg = f"*{signal} Signal for {stock} [{tf}]*\nTime: `{now}`\nEntry: `{entry}`\nSL: `{sl}`\nTP: `{tp}`"
                     send_telegram_message(msg)
                     log_signal(stock, tf, signal, entry, sl, tp)
-                    active_trades[stock] = {"type": signal, "entry": entry, "sl": sl, "tp": tp}
+                    active_trades[key] = {"type": signal, "entry": entry, "sl": sl, "tp": tp}
+
     time.sleep(60)
