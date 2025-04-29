@@ -123,7 +123,7 @@ while True:
         for label, tf in timeframes.items():
             df = fetch_data(stock, tf)
             if df is not None and not df.empty:
-                signal, entry, sl, tp, tsl, emoji = liquidity_grab_with_vwap(df)
+                signal, entry, sl, tp, tsl, emoji = liquidity_grab_with_vwap_only(df)
                 if signal != "NO SIGNAL":
                     signal_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
                     msg = (
