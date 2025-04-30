@@ -28,20 +28,28 @@ active_signals = {}
 
 # ডেটা আনো
 def fetch_data(symbol, interval, period):
-    data = yf.download(tickers=symbol, interval=interval, period=period)
+    data = yf.download(tickers=symbol, interval=interval, period=period, progress=False)
     data.dropna(inplace=True)
     return data
 
-# ট্রেন্ড চেক করো (Simple Structure Filter)
+# ট্রেন্ড চেক করো (Structure Filter + Error Handling)
 def get_trend(df):
-    if df['Close'].iloc[-1] > df['Close'].rolling(20).mean().iloc[-1]:
-        return 'BULLISH'
-    else:
-        return 'BEARISH'
+    ma20 = df['Close'].rolling(20).mean()
+    if ma20.isna().all():
+        return 'UNKNOWN'
+    try:
+        if df['Close'].iloc[-1] > ma20.iloc[-1]:
+            return 'BULLISH'
+        else:
+            return 'BEARISH'
+    except:
+        return 'UNKNOWN'
 
 # মূল স্ট্র্যাটেজি + ফিল্টার
 def liquidity_grab_with_filters(df, trend):
     signal = None
+    if len(df) < 15:
+        return None
     latest = df.iloc[-1]
     prev = df.iloc[-2]
     recent_highs = df['High'][-12:-2]
@@ -84,6 +92,8 @@ for stock in TOP_10_STOCKS:
         continue
 
     trend = get_trend(df_1h)
+    if trend == 'UNKNOWN':
+        continue
 
     if stock in active_signals:
         continue  # পুরনো সিগনাল হলে স্কিপ করো
@@ -95,4 +105,4 @@ for stock in TOP_10_STOCKS:
         send_telegram(msg)
         active_signals[stock] = result
 
-print("Scan complete. Signal send hoye geche jodi match hoy।")
+print("Scan complete. Signal পাঠানো হয়ে গেছে যদি match হয়ে থাকে।")
