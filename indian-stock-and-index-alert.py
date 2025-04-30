@@ -1,4 +1,13 @@
-import time import yfinance as yf import requests import logging from datetime import datetime import pytz import ssl import certifi import os from keep_alive import keep_alive
+import time 
+import yfinance as yf 
+import requests
+import logging from datetime 
+import datetime 
+import pytz 
+import ssl 
+import certifi 
+import os 
+from keep_alive import keep_alive
 
 keep_alive()
 
@@ -16,9 +25,9 @@ INDIAN_STOCKS = [ "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.
 
 ALL_SYMBOLS = INDIAN_STOCKS
 
-timeframes = { "Intraday 15m": "15m", "Intraday 30m": "30m" }
+timeframes = { "Intraday 15m": "15m" }
 
-active_trades = {} last_signal_time = time.time() signal_status = {}
+active_trades = {} last_signal_time = time.time()
 
 logging.basicConfig(filename="trade_bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")
 
@@ -28,20 +37,17 @@ def fetch_data(symbol, tf): try: df = yf.download(tickers=symbol, period="2d", i
 
 def calculate_vwap(df): df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum() return df
 
-def liquidity_grab_with_vwap(df): df = calculate_vwap(df) df['high_shift'] = df['high'].shift(1) df['low_shift'] = df['low'].shift(1) df['close_above_vwap'] = df['close'] > df['vwap'] df['close_below_vwap'] = df['close'] < df['vwap']
+def liquidity_grab_with_vwap(df): df = calculate_vwap(df) df['high_shift'] = df['high'].shift(1) df['low_shift'] = df['low'].shift(1) df['close_shift'] = df['close'].shift(1) df['above_vwap'] = df['close'] > df['vwap'] df['below_vwap'] = df['close'] < df['vwap'] df['vwap_sustain'] = (df['close'] > df['vwap']) & (df['close_shift'] > df['vwap']) df['vwap_fall'] = (df['close'] < df['vwap']) & (df['close_shift'] < df['vwap'])
 
 liquidity_grab = (df['high'] > df['high_shift']) & (df['low'] < df['low_shift'])
 
-sustained_above = df['close_above_vwap'].rolling(window=2).sum().iloc[-1] == 2
-sustained_below = df['close_below_vwap'].rolling(window=2).sum().iloc[-1] == 2
-
-if liquidity_grab.iloc[-1] and sustained_above:
+if liquidity_grab.iloc[-1] and df['vwap_sustain'].iloc[-1]:
     entry = round(df['close'].iloc[-1], 2)
     sl = round(df['low'].iloc[-2], 2)
     tp = round(entry + (entry - sl) * 2, 2)
     tsl = round(entry + (entry - sl) * 1.5, 2)
     return "BUY", entry, sl, tp, tsl, "\U0001F7E2"
-elif liquidity_grab.iloc[-1] and sustained_below:
+elif liquidity_grab.iloc[-1] and df['vwap_fall'].iloc[-1]:
     entry = round(df['close'].iloc[-1], 2)
     sl = round(df['high'].iloc[-2], 2)
     tp = round(entry - (sl - entry) * 2, 2)
@@ -80,13 +86,7 @@ for stock in ALL_SYMBOLS:
         df = fetch_data(stock, tf)
         if df is not None and not df.empty:
             signal, entry, sl, tp, tsl, emoji = liquidity_grab_with_vwap(df)
-
             if signal != "NO SIGNAL":
-                # Prevent duplicate signal
-                last_sent = signal_status.get(stock)
-                if last_sent == signal:
-                    continue
-
                 signal_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
                 msg = (
                     f"{emoji} *{signal} Signal for {stock}*\n"
@@ -102,14 +102,13 @@ for stock in ALL_SYMBOLS:
                     "tp": tp,
                     "direction": signal
                 }
-                signal_status[stock] = signal
                 signal_found = True
                 break
     if signal_found:
         break
 
 if not signal_found and (time.time() - last_signal_time > 3600):
-    send_telegram_message("\u26A0\uFE0F No Signal in the Last 1 Hour (Indian Stocks)", TELEGRAM_CHAT_ID)
+    send_telegram_message("⚠️ No Signal in the Last 1 Hour (Indian Stocks)", TELEGRAM_CHAT_ID)
     last_signal_time = time.time()
 
 time.sleep(60)
