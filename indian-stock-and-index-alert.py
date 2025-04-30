@@ -21,13 +21,14 @@ TELEGRAM_CHAT_ID = "-1002689167916"
 
 # Top 45 Indian Stocks (NSE Symbols)
 INDIAN_STOCKS = [
-    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "HINDUNILVR.NS", 
-    "LT.NS", "SBIN.NS", "KOTAKBANK.NS", "ITC.NS", "AXISBANK.NS", "BHARTIARTL.NS", 
-    "ASIANPAINT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", 
-    "NESTLEIND.NS", "WIPRO.NS", "TITAN.NS", "ULTRACEMCO.NS", "HDFCLIFE.NS", "POWERGRID.NS", 
-    "TECHM.NS", "ONGC.NS", "NTPC.NS", "COALINDIA.NS", "JSWSTEEL.NS", "TATASTEEL.NS", 
-    "BPCL.NS", "BRITANNIA.NS", "DIVISLAB.NS", "ADANIENT.NS", "ADANIPORTS.NS", "GRASIM.NS", 
-    "CIPLA.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "DRREDDY.NS", 
+    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+    "HINDUNILVR.NS", "LT.NS", "SBIN.NS", "KOTAKBANK.NS", "ITC.NS",
+    "AXISBANK.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "BAJFINANCE.NS", "HCLTECH.NS",
+    "MARUTI.NS", "SUNPHARMA.NS", "NESTLEIND.NS", "WIPRO.NS", "TITAN.NS",
+    "ULTRACEMCO.NS", "HDFCLIFE.NS", "POWERGRID.NS", "TECHM.NS", "ONGC.NS",
+    "NTPC.NS", "COALINDIA.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "BPCL.NS",
+    "BRITANNIA.NS", "DIVISLAB.NS", "ADANIENT.NS", "ADANIPORTS.NS", "GRASIM.NS",
+    "CIPLA.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "DRREDDY.NS",
     "BAJAJFINSV.NS", "SBILIFE.NS", "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "M&M.NS"
 ]
 
@@ -42,7 +43,6 @@ timeframes = {
 active_trades = {}
 last_signal_time = time.time()
 
-# Set up logging
 logging.basicConfig(filename="trade_bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")
 
 def send_telegram_message(message, chat_id):
@@ -88,13 +88,13 @@ def liquidity_grab_with_vwap(df):
         sl = round(df['low'].iloc[-2], 2)
         tp = round(entry + (entry - sl) * 2, 2)
         tsl = round(entry + (entry - sl) * 1.5, 2)
-        return "BUY", entry, sl, tp, tsl, "\U0001F7E2"
+        return "BUY", entry, sl, tp, tsl, "🟢"
     elif liquidity_grab.iloc[-1] and df['vwap_fall'].iloc[-1]:
         entry = round(df['close'].iloc[-1], 2)
         sl = round(df['high'].iloc[-2], 2)
         tp = round(entry - (sl - entry) * 2, 2)
         tsl = round(entry - (sl - entry) * 1.5, 2)
-        return "SELL", entry, sl, tp, tsl, "\U0001F534"
+        return "SELL", entry, sl, tp, tsl, "🔴"
 
     return "NO SIGNAL", None, None, None, None, None
 
@@ -136,11 +136,11 @@ while True:
 
 Type: {label}
 Timeframe: {tf}
-Time: {signal_time}
-Entry: {entry}
-SL: {sl}
-TP: {tp}
-TSL: {tsl}"""
+Time: `{signal_time}`
+Entry: `{entry}`
+SL: `{sl}`
+TP: `{tp}`
+TSL: `{tsl}`"""
                     send_telegram_message(msg, TELEGRAM_CHAT_ID)
 
                     active_trades[key] = {
@@ -158,4 +158,3 @@ TSL: {tsl}"""
         last_signal_time = time.time()
 
     time.sleep(60)
-    print("Bot is running 24/7!")
