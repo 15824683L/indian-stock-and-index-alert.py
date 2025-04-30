@@ -11,7 +11,10 @@ TELEGRAM_CHAT_ID = 'তোমার_চ্যাট_আইডি'
 def send_telegram(msg):
     url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
     data = {'chat_id': TELEGRAM_CHAT_ID, 'text': msg}
-    requests.post(url, data=data)
+    try:
+        requests.post(url, data=data)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 # টপ ১০ NSE স্টকের তালিকা
 TOP_10_STOCKS = ['RELIANCE.NS', 'TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 'ICICIBANK.NS',
@@ -28,14 +31,18 @@ active_signals = {}
 
 # ডেটা আনো
 def fetch_data(symbol, interval, period):
-    data = yf.download(tickers=symbol, interval=interval, period=period, progress=False)
-    data.dropna(inplace=True)
-    return data
+    try:
+        data = yf.download(tickers=symbol, interval=interval, period=period, auto_adjust=False, progress=False)
+        data.dropna(inplace=True)
+        return data
+    except Exception as e:
+        print(f"Error fetching data for {symbol}: {e}")
+        return pd.DataFrame()
 
-# ট্রেন্ড চেক করো (Structure Filter + Error Handling)
+# ট্রেন্ড চেক করো (Simple MA Structure Filter)
 def get_trend(df):
     ma20 = df['Close'].rolling(20).mean()
-    if ma20.isna().all():
+    if ma20.dropna().empty:
         return 'UNKNOWN'
     try:
         if df['Close'].iloc[-1] > ma20.iloc[-1]:
@@ -48,8 +55,6 @@ def get_trend(df):
 # মূল স্ট্র্যাটেজি + ফিল্টার
 def liquidity_grab_with_filters(df, trend):
     signal = None
-    if len(df) < 15:
-        return None
     latest = df.iloc[-1]
     prev = df.iloc[-2]
     recent_highs = df['High'][-12:-2]
@@ -61,7 +66,7 @@ def liquidity_grab_with_filters(df, trend):
         latest['Close'] > prev['High'] and
         prev['Volume'] > avg_volume and
         trend == 'BULLISH'):
-        
+
         signal = 'BUY'
         entry = latest['Close']
         sl = prev['Low']
@@ -92,6 +97,7 @@ for stock in TOP_10_STOCKS:
         continue
 
     trend = get_trend(df_1h)
+
     if trend == 'UNKNOWN':
         continue
 
@@ -105,4 +111,4 @@ for stock in TOP_10_STOCKS:
         send_telegram(msg)
         active_signals[stock] = result
 
-print("Scan complete. Signal পাঠানো হয়ে গেছে যদি match হয়ে থাকে।")
+print("Scan complete. Signals sent to Telegram if any matched.")
