@@ -31,7 +31,10 @@ INDIAN_STOCKS = [
 ]
 
 ALL_SYMBOLS = INDIAN_STOCKS
-timeframes = { "Intraday 15m": "15m" }
+timeframes = {
+    "Intraday 15m": "15m",
+    "Intraday 30m": "30m"
+}
 active_trades = {}
 last_signal_time = time.time()
 
