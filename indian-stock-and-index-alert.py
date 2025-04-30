@@ -1,8 +1,20 @@
-import time import yfinance as yf import requests import logging from datetime import datetime import pytz import ssl import certifi import os from keep_alive import keep_alive
+import time 
+import yfinance as yf 
+import requests 
+import logging 
+from datetime 
+import datetime 
+import pytz 
+import ssl 
+import certifi 
+import os
+from keep_alive import keep_alive
+
+Keep the bot alive
 
 keep_alive()
 
-SSL cert path set
+Set SSL cert path
 
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
@@ -14,7 +26,13 @@ Top 45 Indian Stocks (NSE Symbols)
 
 INDIAN_STOCKS = [ "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "HINDUNILVR.NS", "LT.NS", "SBIN.NS", "KOTAKBANK.NS", "ITC.NS", "AXISBANK.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "NESTLEIND.NS", "WIPRO.NS", "TITAN.NS", "ULTRACEMCO.NS", "HDFCLIFE.NS", "POWERGRID.NS", "TECHM.NS", "ONGC.NS", "NTPC.NS", "COALINDIA.NS", "JSWSTEEL.NS", "TATASTEEL.NS", "BPCL.NS", "BRITANNIA.NS", "DIVISLAB.NS", "ADANIENT.NS", "ADANIPORTS.NS", "GRASIM.NS", "CIPLA.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "DRREDDY.NS", "BAJAJFINSV.NS", "SBILIFE.NS", "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "M&M.NS" ]
 
-ALL_SYMBOLS = INDIAN_STOCKS timeframes = { "Intraday 15m": "15m", "Intraday 30m": "30m" } active_trades = {} last_signal_time = time.time()
+ALL_SYMBOLS = INDIAN_STOCKS
+
+Timeframes
+
+timeframes = { "Intraday 15m": "15m", "Intraday 30m": "30m" }
+
+active_trades = {} last_signal_time = time.time()
 
 logging.basicConfig(filename="trade_bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")
 
@@ -45,13 +63,9 @@ return "NO SIGNAL", None, None, None, None, None
 
 kolkata_tz = pytz.timezone("Asia/Kolkata")
 
-while True: signal_found = False
+while True: signal_found = False for stock in ALL_SYMBOLS: for label, tf in timeframes.items(): key = f"{stock}_{tf}"
 
-for stock in ALL_SYMBOLS:
-    for label, tf in timeframes.items():
-        key = f"{stock}_{tf}"
-
-        if key in active_trades:
+if key in active_trades:
             df = fetch_data(stock, tf)
             if df is not None and not df.empty:
                 last_price = df['close'].iloc[-1]
@@ -77,10 +91,9 @@ for stock in ALL_SYMBOLS:
             signal, entry, sl, tp, tsl, emoji = liquidity_grab_with_vwap(df)
             if signal != "NO SIGNAL":
                 signal_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
-                msg = (
-                    f"{emoji} *{signal} Signal for {stock}*
+                msg = f"""{emoji} *{signal} Signal for {stock}*
 
-Type: {label}\nTimeframe: {tf}\nTime: {signal_time}\n" f"Entry: {entry}\nSL: {sl}\nTP: {tp}\nTSL: {tsl}" ) send_telegram_message(msg, TELEGRAM_CHAT_ID)
+Type: {label} Timeframe: {tf} Time: {signal_time} Entry: {entry} SL: {sl} TP: {tp} TSL: {tsl}""" send_telegram_message(msg, TELEGRAM_CHAT_ID)
 
 active_trades[key] = {
                     "signal_time": signal_time,
