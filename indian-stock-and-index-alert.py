@@ -9,7 +9,7 @@ import certifi
 import os
 from keep_alive import keep_alive
 
-Keep the bot alive
+# Keep the bot alive
 
 keep_alive()
 
