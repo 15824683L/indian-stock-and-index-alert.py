@@ -2,8 +2,7 @@ import time
 import yfinance as yf 
 import requests 
 import logging 
-from datetime 
-import datetime 
+from datetime import datetime
 import pytz 
 import ssl 
 import certifi 
