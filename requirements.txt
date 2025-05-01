@@ -1,7 +1,7 @@
 pandas-ta==0.3.14b0
+numpy==1.23.5
 yfinance
 requests
 pytz
-numpy
 certifi
 flask
