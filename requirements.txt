@@ -1,5 +1,7 @@
+pandas-ta
 yfinance
 requests
+pytz
+numpy
 certifi
 flask
-Ta-lib
