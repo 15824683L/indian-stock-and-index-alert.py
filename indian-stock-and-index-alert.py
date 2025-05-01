@@ -13,9 +13,7 @@ TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 CHANNEL_ID = "@swingtreadingSmartbot"
 
 stocks = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "LT.NS", "KOTAKBANK.NS", "SBIN.NS",
-          "AXISBANK.NS", "ITC.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "HINDUNILVR.NS", "BAJFINANCE.NS", "WIPRO.NS",
-          "ULTRACEMCO.NS", "HCLTECH.NS", "MARUTI.NS", "TECHM.NS", "SUNPHARMA.NS", "NTPC.NS", "ONGC.NS", "POWERGRID.NS",
-          "TITAN.NS", "GRASIM.NS", "BPCL.NS", "DIVISLAB.NS", "NESTLEIND.NS", "JSWSTEEL.NS", "BAJAJFINSV.NS"]
+          "AXISBANK.NS", "ITC.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "HINDUNILVR.NS"]
 
 def calculate_supertrend(df):
     df.ta.supertrend(length=14, multiplier=3, append=True)
