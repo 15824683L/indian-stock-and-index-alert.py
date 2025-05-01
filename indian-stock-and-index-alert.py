@@ -5,6 +5,11 @@ import time
 import requests
 import talib as ta
 import numpy as np
+from keep_alive import keep_alive
+    
+
+    
+keep_alive()
 
 TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 CHANNEL_ID = "@swingtreadingSmartbot"
