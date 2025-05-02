@@ -1,19 +1,34 @@
-import yfinance as yf
-import pytz
-import datetime
+from nsepython import *
 import time
+import datetime
+import pytz
 import requests
+import pandas as pd
 import pandas_ta as ta
-import numpy as np
-from keep_alive import keep_alive
-
-keep_alive()
 
 TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 CHANNEL_ID = "@swingtreadingSmartbot"
 
-stocks = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "LT.NS", "KOTAKBANK.NS", "SBIN.NS",
-          "AXISBANK.NS", "ITC.NS", "BHARTIARTL.NS", "ASIANPAINT.NS", "HINDUNILVR.NS"]
+stocks = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "LT", "KOTAKBANK", "SBIN",
+          "AXISBANK", "ITC", "BHARTIARTL", "ASIANPAINT", "HINDUNILVR"]
+
+def get_intraday_data(stock):
+    try:
+        url = f"https://www.nseindia.com/api/chart-databyindex?index={stock}&preopen=true"
+        df = nse_eq(stock)
+        candles = nsefetch(f"https://www.nseindia.com/api/chart-databyindex?index={stock}&preopen=true")['grapthData']
+        df = pd.DataFrame(candles, columns=['timestamp', 'price'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df['Close'] = df['price']
+        df = df.set_index('timestamp').resample('5T').ffill()
+        df["High"] = df["Close"]
+        df["Low"] = df["Close"]
+        df["Open"] = df["Close"]
+        df["Volume"] = 1000  # Fake volume for calculation
+        return df.drop(columns=["price"])
+    except Exception as e:
+        print(f"Error fetching {stock}: {e}")
+        return pd.DataFrame()
 
 def calculate_supertrend(df):
     df.ta.supertrend(length=14, multiplier=3, append=True)
@@ -32,44 +47,37 @@ def calculate_volume_breakout(df, period=20):
     return df['Volume'] > (1.5 * avg_volume)
 
 def check_signal(stock):
-    try:
-        df = yf.download(stock, period="2d", interval="5m", progress=False)
-        time.sleep(3)  # Rate limit কমানোর জন্য delay
+    df = get_intraday_data(stock)
+    if df.empty or len(df) < 2:
+        return None
 
-        if df.empty or len(df) < 2:
-            return None
+    supertrend = calculate_supertrend(df)
+    macd, macdsignal = calculate_macd(df)
+    vwap = calculate_vwap(df)
+    volume_breakout = calculate_volume_breakout(df)
 
-        supertrend = calculate_supertrend(df)
-        macd, macdsignal = calculate_macd(df)
-        vwap = calculate_vwap(df)
-        volume_breakout = calculate_volume_breakout(df)
+    last_close = df["Close"].iloc[-1]
+    prev_close = df["Close"].iloc[-2]
 
-        last_close = df["Close"].iloc[-1]
-        prev_close = df["Close"].iloc[-2]
+    supertrend_signal = last_close > supertrend.iloc[-1]
+    macd_signal = macd.iloc[-1] > macdsignal.iloc[-1]
+    vwap_signal = last_close > vwap.iloc[-1]
+    volume_signal = volume_breakout.iloc[-1]
 
-        supertrend_signal = last_close > supertrend.iloc[-1]
-        macd_signal = macd.iloc[-1] > macdsignal.iloc[-1]
-        vwap_signal = last_close > vwap.iloc[-1]
-        volume_signal = volume_breakout.iloc[-1]
-
-        if supertrend_signal and macd_signal and vwap_signal and volume_signal:
-            return {
-                "stock": stock.split(".")[0],
-                "entry": round(prev_close, 2),
-                "target": round(last_close * 1.02, 2),
-                "type": "BUY"
-            }
-        elif not supertrend_signal and not macd_signal and not vwap_signal and not volume_signal:
-            return {
-                "stock": stock.split(".")[0],
-                "entry": round(prev_close, 2),
-                "target": round(last_close * 0.98, 2),
-                "type": "SELL"
-            }
-
-    except Exception as e:
-        print(f"{stock} ডাউনলোডে সমস্যা হয়েছে: {e}")
-        time.sleep(5)  # error এর পর বিরতি
+    if supertrend_signal and macd_signal and vwap_signal and volume_signal:
+        return {
+            "stock": stock,
+            "entry": round(prev_close, 2),
+            "target": round(last_close * 1.02, 2),
+            "type": "BUY"
+        }
+    elif not supertrend_signal and not macd_signal and not vwap_signal and not volume_signal:
+        return {
+            "stock": stock,
+            "entry": round(prev_close, 2),
+            "target": round(last_close * 0.98, 2),
+            "type": "SELL"
+        }
 
     return None
 
