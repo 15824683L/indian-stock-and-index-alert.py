@@ -1,26 +1,25 @@
-from nsepython import *
 import time
 import datetime
 import pytz
 import requests
 import pandas as pd
 import pandas_ta as ta
+from nsepython import *
 from keep_alive import keep_alive
 
-
-
+# Keep bot alive
 keep_alive()
 
+# Telegram Bot Info
 TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 CHANNEL_ID = "@swingtreadingSmartbot"
 
-stocks = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "LT", "KOTAKBANK", "SBIN",
-          "AXISBANK", "ITC", "BHARTIARTL", "ASIANPAINT", "HINDUNILVR"]
+# Stocks to monitor
+stocks = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "LT", "KOTAKBANK",
+          "SBIN", "AXISBANK", "ITC", "BHARTIARTL", "ASIANPAINT", "HINDUNILVR"]
 
 def get_intraday_data(stock):
     try:
-        url = f"https://www.nseindia.com/api/chart-databyindex?index={stock}&preopen=true"
-        df = nse_eq(stock)
         candles = nsefetch(f"https://www.nseindia.com/api/chart-databyindex?index={stock}&preopen=true")['grapthData']
         df = pd.DataFrame(candles, columns=['timestamp', 'price'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
@@ -29,10 +28,10 @@ def get_intraday_data(stock):
         df["High"] = df["Close"]
         df["Low"] = df["Close"]
         df["Open"] = df["Close"]
-        df["Volume"] = 1000  # Fake volume for calculation
+        df["Volume"] = 1000  # Placeholder volume
         return df.drop(columns=["price"])
     except Exception as e:
-        print(f"Error fetching {stock}: {e}")
+        print(f"Error fetching data for {stock}: {e}")
         return pd.DataFrame()
 
 def calculate_supertrend(df):
@@ -100,7 +99,6 @@ def get_ist_time():
 
 def run_bot():
     last_no_signal_time = time.time() - 3600
-
     while True:
         found_signal = False
         for stock in stocks:
@@ -108,7 +106,7 @@ def run_bot():
             if signal:
                 found_signal = True
                 time_now = get_ist_time()
-                msg = f"[{signal['type']} SIGNAL - {signal['stock']}]\nTarget: ₹{signal['target']}\nEntry: ₹{signal['entry']}\nSignal time: {time_now} (IST)"
+                msg = f"[{signal['type']} SIGNAL - {signal['stock']}]\nTarget: ₹{signal['target']}\nEntry: ₹{signal['entry']}\nTime: {time_now} (IST)"
                 send_to_telegram(msg)
 
         if not found_signal:
@@ -118,7 +116,7 @@ def run_bot():
                 send_to_telegram(f"[NO SIGNAL]\nKono stock e signal hit koreni.\nTime: {time_now} (IST)")
                 last_no_signal_time = current_time
 
-        time.sleep(300)
+        time.sleep(300)  # wait 5 minutes
 
 if __name__ == "__main__":
     run_bot()
