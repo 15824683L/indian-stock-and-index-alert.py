@@ -15,13 +15,9 @@ TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
 CHANNEL_ID = "@swingtreadingSmartbot"
 
 # Stocks to monitor
-stocks = [
-    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "LT", "KOTAKBANK", "SBIN", "AXISBANK", "ITC",
-    "BHARTIARTL", "ASIANPAINT", "HINDUNILVR", "HCLTECH", "WIPRO", "BAJFINANCE", "BAJAJFINSV", "NESTLEIND",
-    "SUNPHARMA", "ULTRACEMCO", "TITAN", "POWERGRID", "NTPC", "COALINDIA", "TECHM", "ADANIENT", "MARUTI",
-    "CIPLA", "HINDALCO", "JSWSTEEL", "GRASIM", "TATASTEEL", "ONGC", "SBILIFE", "HDFCLIFE", "DIVISLAB",
-    "BPCL", "EICHERMOT", "HEROMOTOCO", "BRITANNIA", "DRREDDY", "APOLLOHOSP", "BAJAJ-AUTO", "M&M", "INDUSINDBK"
-]
+stocks = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "LT", "KOTAKBANK",
+          "SBIN", "AXISBANK", "ITC", "BHARTIARTL", "ASIANPAINT", "HINDUNILVR"]
+
 def get_intraday_data(stock):
     try:
         candles = nsefetch(f"https://www.nseindia.com/api/chart-databyindex?index={stock}&preopen=true")['grapthData']
@@ -120,6 +116,7 @@ def run_bot():
                 send_to_telegram(f"[NO SIGNAL]\nKono stock e signal hit koreni.\nTime: {time_now} (IST)")
                 last_no_signal_time = current_time
 
-      time.sleep(300)  # 300 seconds = 5 minutes
+        time.sleep(300)  # wait 5 minutes
+
 if __name__ == "__main__":
     run_bot()
