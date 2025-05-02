@@ -120,7 +120,6 @@ def run_bot():
                 send_to_telegram(f"[NO SIGNAL]\nKono stock e signal hit koreni.\nTime: {time_now} (IST)")
                 last_no_signal_time = current_time
 
-       time.sleep(60)  # 60 seconds = 1 minute
-
+      time.sleep(300)  # 300 seconds = 5 minutes
 if __name__ == "__main__":
     run_bot()
