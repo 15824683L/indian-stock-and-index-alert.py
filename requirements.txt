@@ -1,7 +1,5 @@
-numpy==1.24.4
-pandas
-pandas_ta
-nsepython
-requests
-pytz
+yfinance==0.2.40
+requests==2.31.0
+pytz==2024.1
+certifi==2024.2.2
 flask
