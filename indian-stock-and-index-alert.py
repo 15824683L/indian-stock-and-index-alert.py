@@ -8,16 +8,16 @@ import ssl
 import certifi  
 import os  
 from keep_alive import keep_alive  
-  
+
 keep_alive()  
-  
+
 # SSL cert path set  
 os.environ['SSL_CERT_FILE'] = certifi.where()  
-  
+
 # Telegram Bot Config  
 TELEGRAM_BOT_TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"  
 TELEGRAM_CHAT_ID = "-1002689167916"  
-  
+
 # Top 45 Indian Stocks (NSE Symbols)  
 INDIAN_STOCKS = [  
     "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",  
@@ -30,19 +30,19 @@ INDIAN_STOCKS = [
     "CIPLA.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "DRREDDY.NS",  
     "BAJAJFINSV.NS", "SBILIFE.NS", "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "M&M.NS"  
 ]  
-  
+
 ALL_SYMBOLS = INDIAN_STOCKS  
-  
+
 timeframes = {  
     "Intraday 15m": "15m",  
     "Intraday 30m": "30m"  
 }  
-  
+
 active_trades = {}  
 last_signal_time = time.time()  
-  
+
 logging.basicConfig(filename="trade_bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")  
-  
+
 def send_telegram_message(message, chat_id):  
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"  
     data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}  
@@ -52,7 +52,7 @@ def send_telegram_message(message, chat_id):
             print(f"Telegram error: {response.text}")  
     except Exception as e:  
         print(f"Telegram send failed: {e}")  
-  
+
 def fetch_data(symbol, tf):  
     try:  
         df = yf.download(tickers=symbol, period="2d", interval=tf)  
@@ -64,21 +64,21 @@ def fetch_data(symbol, tf):
     except Exception as e:  
         logging.error(f"Error fetching {symbol} - {e}")  
         return None  
-  
+
 def calculate_vwap(df):  
     df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()  
     return df  
-  
+
 def liquidity_grab_with_vwap(df):  
     df = calculate_vwap(df)  
     df['high_shift'] = df['high'].shift(1)  
     df['low_shift'] = df['low'].shift(1)  
-      
+
     liquidity_grab = (df['high'] > df['high_shift']) & (df['low'] < df['low_shift'])  
-      
+
     close_above_vwap = df['close'] > df['vwap']  
     close_below_vwap = df['close'] < df['vwap']  
-  
+
     if liquidity_grab.iloc[-1] and close_above_vwap.iloc[-1]:  
         entry = round(df['close'].iloc[-1], 2)  
         sl = round(df['low'].iloc[-2], 2)  
@@ -91,14 +91,14 @@ def liquidity_grab_with_vwap(df):
         tp = round(entry - (sl - entry) * 2, 2)  
         tsl = round(entry - (sl - entry) * 1.5, 2)  
         return "SELL", entry, sl, tp, tsl, "\U0001F534"  
-      
+
     return "NO SIGNAL", None, None, None, None, None  
-  
+
 kolkata_tz = pytz.timezone("Asia/Kolkata")  
-  
+
 while True:  
     signal_found = False  
-  
+
     for stock in ALL_SYMBOLS:  
         if stock in active_trades:  
             df = fetch_data(stock, "15m")  
@@ -106,7 +106,7 @@ while True:
                 last_price = df['close'].iloc[-1]  
                 trade = active_trades[stock]  
                 now_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M')  
-  
+
                 if trade['direction'] == "BUY" and last_price >= trade['tp']:  
                     send_telegram_message(f"✅ *TP HIT for {stock}*\nTime: `{now_time}`\nPrice: `{last_price}`\nSignal: BUY", TELEGRAM_CHAT_ID)  
                     del active_trades[stock]  
@@ -120,7 +120,7 @@ while True:
                     send_telegram_message(f"🛑 *SL HIT for {stock}*\nTime: `{now_time}`\nPrice: `{last_price}`\nSignal: SELL", TELEGRAM_CHAT_ID)  
                     del active_trades[stock]  
             continue  
-  
+
         for label, tf in timeframes.items():  
             df = fetch_data(stock, tf)  
             if df is not None and not df.empty:  
@@ -133,7 +133,7 @@ while True:
                         f"Entry: `{entry}`\nSL: `{sl}`\nTP: `{tp}`\nTSL: `{tsl}`"  
                     )  
                     send_telegram_message(msg, TELEGRAM_CHAT_ID)  
-  
+
                     active_trades[stock] = {  
                         "signal_time": signal_time,  
                         "entry": entry,  
@@ -145,10 +145,10 @@ while True:
                     break  
         if signal_found:  
             break  
-  
+
     if not signal_found and (time.time() - last_signal_time > 3600):  
         send_telegram_message("⚠️ No Signal in the Last 1 Hour (Indian Stocks)", TELEGRAM_CHAT_ID)  
         last_signal_time = time.time()  
-  
+
     time.sleep(60)  
     print("Bot is running 24/7!") 
