@@ -11,14 +11,11 @@ from keep_alive import keep_alive
 
 keep_alive()
 
-# SSL cert path
 os.environ['SSL_CERT_FILE'] = certifi.where()
 
-# Telegram Bot Config  
-TELEGRAM_BOT_TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"  
-TELEGRAM_CHAT_ID = "@swingtreadingsmartbot"  
+TELEGRAM_BOT_TOKEN = "8100205821:AAE0sGJhnA8ySkuSusEXSf9bYU5OU6sFzVg"
+TELEGRAM_CHAT_ID = "@swingtreadingsmartbot"
 
-# Stock list
 INDIAN_STOCKS = [
     "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
     "HINDUNILVR.NS", "LT.NS", "SBIN.NS", "KOTAKBANK.NS", "ITC.NS",
@@ -30,12 +27,12 @@ INDIAN_STOCKS = [
     "CIPLA.NS", "EICHERMOT.NS", "HEROMOTOCO.NS", "HINDALCO.NS", "DRREDDY.NS",
     "BAJAJFINSV.NS", "SBILIFE.NS", "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "M&M.NS"
 ]
-ALL_SYMBOLS = INDIAN_STOCKS
 timeframes = {"Intraday 15m": "15m", "Intraday 30m": "30m"}
 active_trades = {}
 last_signal_time = time.time()
 
 logging.basicConfig(filename="trade_bot.log", level=logging.INFO, format="%(asctime)s - %(message)s")
+kolkata_tz = pytz.timezone("Asia/Kolkata")
 
 def send_telegram_message(message, chat_id):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -50,20 +47,26 @@ def send_telegram_message(message, chat_id):
 def fetch_data(symbol, tf):
     try:
         df = yf.download(tickers=symbol, period="2d", interval=tf)
+        if df.empty or len(df) < 5:
+            return None
         df.reset_index(inplace=True)
-        df.rename(columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"}, inplace=True)
-        df = df[['Datetime' if 'Datetime' in df.columns else 'Date', 'open', 'high', 'low', 'close', 'volume']]
-        df.columns = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
-        return df
+        df.columns = [col.lower() for col in df.columns]
+        df.rename(columns={'open': 'open', 'high': 'high', 'low': 'low', 'close': 'close', 'volume': 'volume'}, inplace=True)
+        df['timestamp'] = df['datetime'] if 'datetime' in df.columns else df['date']
+        return df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
     except Exception as e:
         logging.error(f"Error fetching {symbol} - {e}")
         return None
 
 def calculate_vwap(df):
-    df['vwap'] = (df['volume'] * (df['high'] + df['low'] + df['close']) / 3).cumsum() / df['volume'].cumsum()
+    typical_price = (df['high'] + df['low'] + df['close']) / 3
+    vwap = (typical_price * df['volume']).cumsum() / df['volume'].cumsum()
+    df['vwap'] = vwap
     return df
 
 def detect_order_block(df, direction):
+    if len(df) < 4:
+        return False
     if direction == "BUY":
         return df['low'].iloc[-1] > df['low'].iloc[-3] and df['close'].iloc[-1] > df['open'].iloc[-1]
     elif direction == "SELL":
@@ -95,15 +98,13 @@ def liquidity_grab_with_vwap(df):
 
     return "NO SIGNAL", None, None, None, None, None
 
-kolkata_tz = pytz.timezone("Asia/Kolkata")
-
 while True:
     signal_found = False
 
-    for stock in ALL_SYMBOLS:
+    for stock in INDIAN_STOCKS:
         if stock in active_trades:
             df = fetch_data(stock, "15m")
-            if df is not None and not df.empty:
+            if df is not None:
                 last_price = df['close'].iloc[-1]
                 trade = active_trades[stock]
                 now_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M')
@@ -124,7 +125,7 @@ while True:
 
         for label, tf in timeframes.items():
             df = fetch_data(stock, tf)
-            if df is not None and not df.empty:
+            if df is not None:
                 signal, entry, sl, tp, tsl, emoji = liquidity_grab_with_vwap(df)
                 if signal != "NO SIGNAL":
                     signal_time = datetime.now(kolkata_tz).strftime('%Y-%m-%d %H:%M:%S')
@@ -152,5 +153,4 @@ while True:
         last_signal_time = time.time()
 
     time.sleep(60)
-    print("Bot is running 24/7!")
-
+    print("Bot is running 24/7...")
