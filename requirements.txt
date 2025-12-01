@@ -1,5 +1,4 @@
-yfinance
 requests
-pytz
-certifi
+pandas
+yfinance
 Flask
