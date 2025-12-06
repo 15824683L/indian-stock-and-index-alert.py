@@ -1,65 +1,98 @@
-import time
-from datetime import datetime, timezone
-import requests
 import pandas as pd
 import yfinance as yf
-import math
-from typing import Optional, Dict
-import numpy as np # numpy ইমপোর্ট করা হয়েছে ATR ক্যালকুলেশনের জন্য
-from flask import Flask
-import threading
+import numpy as np
+from datetime import datetime
+import warnings
+import requests 
+import time
+import json 
+import os 
+from flask import Flask 
+from threading import Thread 
+
+warnings.filterwarnings("ignore") 
+
+# শেষ কবে Alive চেক মেসেজ পাঠানো হয়েছে, তা ট্র্যাক করার জন্য
+LAST_ALIVE_CHECK = None 
 
 # =========================
-# --- ১. ডাইরেক্ট টেলিগ্রাম সেটিংস (পরিবর্তন করুন) ---
+# ⚙️ টেলিগ্রাম সেটিংস (TELEGRAM SETTINGS)
 # =========================
-TELEGRAM_BOT_TOKEN = "8537811183:AAF4DWeA5Sks86mBISJvS1iNvLRpkY_FgnA"
-TELEGRAM_CHAT_ID = "8191014589"
+# আপনার নিজস্ব টোকেন এবং আইডি ব্যবহার করুন
+TELEGRAM_BOT_TOKEN = "8537811183:AAF4DWeA5Sks86mBISJvS1iNvLRpkY_FgnA"  
+TELEGRAM_CHAT_ID = "8191014589"     
 
-SEND_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+# =========================
+# ⚙️ ট্রেডিং সেটিংস (TRADING SETTINGS) - ইন্ট্রাডে-এর জন্য পরিবর্তিত
+# =========================
 
-# কয়েন এবং সেটিংস
 COINS = [
-    "BTC-USD","ETH-USD","SOL-USD","BNB-USD",
-    "XRP-USD","DOGE-USD","AVAX-USD","LINK-USD"
+    "ADA-USD",
+    "BNB-USD", 
+    "BTC-USD", 
+    "DOGE-USD",
+    "SOL-USD"
 ]
 
-TF_DIR = "1h"      # HTF (Higher Timeframe)
-TF_ENTRY = "15m"   # LTF (Lower Timeframe)
-EMA_PERIOD = 200
-ATR_PERIOD = 14
-TP_PERCENT = [1.5, 3.0, 5.0]  # TP1, TP2, TP3 (R:R 1.5 এর বেশি নিশ্চিত করার জন্য)
-MAX_SL = 5.0                  # Max SL fallback 
-CHECK_INTERVAL_MIN = 15       # 15m ক্যান্ডেলের জন্য উপযুক্ত সাইকেল টাইম
+# 📢 ইন্ট্রাডে পরিবর্তন: ট্রেন্ড 1h, এন্ট্রি 15m
+TF_DIR = "1h"       # ট্রেন্ড নির্ধারণ (EMA200, MACD)
+TF_ENTRY = "15m"    # এন্ট্রি এবং এক্সিট ম্যানেজমেন্ট
 
-# ট্র্যাকিং ভেরিয়েবল
-# শেষ এন্ট্রি প্রাইস ট্র্যাক করার জন্য (ডুপ্লিকেট এড়াতে)
-LAST_ENTRY_PRICE: Dict[str, float] = {} 
+EMA_PERIOD = 200    
+ATR_PERIOD = 14     
+ATR_MULTIPLIER = 2.0 
+TP_MULTIPLIER = 4.0  # প্রায় 2:1 R:R
+
+MAX_SL_PCT = 3.0    # ইন্ট্রাডেতে এটি 1.0% - 1.5% এ কমানো যেতে পারে
 
 # ===============================
-# --- ২. টেলিগ্রাম সেন্ডার ---
+# 💾 ডেটা পারসিসটেন্স ফাংশন
 # ===============================
-def send_telegram(msg):
-    """HTML ফরম্যাটে টেলিগ্রামে মেসেজ পাঠায়"""
+def load_open_trades():
+    """trades.json ফাইল থেকে ওপেন ট্রেড লোড করে"""
     try:
-        r = requests.post(
-            SEND_URL,
-            data={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}
-        )
-        if r.status_code != 200:
-            print("Telegram error:", r.text)
+        with open('trades.json', 'r') as f:
+            print("Trades loaded successfully from trades.json.")
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("No trades file found or file corrupted. Starting fresh.")
+        return {}
+
+def save_open_trades(trades):
+    """trades.json ফাইলে ওপেন ট্রেড সেভ করে"""
+    try:
+        with open('trades.json', 'w') as f:
+            json.dump(trades, f, indent=4)
+            print("Trades saved to trades.json.")
     except Exception as e:
-        print("Telegram exception:", e)
-
+        print(f"Error saving trades to file: {e}")
 
 # ===============================
-# --- ৩. ডেটা ফেচ ---
+# 📣 টেলিগ্রাম ফাংশন
 # ===============================
-def get_data(ticker, interval, period):
-    """নিরাপদে yfinance থেকে ডেটা ডাউনলোড করে কলামগুলিকে ছোট করে"""
+def send_telegram_message(message):
+    """টেলিগ্রামের মাধ্যমে একটি মেসেজ পাঠায়"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message,
+        'parse_mode': 'Markdown'
+    }
     try:
-        df = yf.download(ticker, interval=interval, period=period, auto_adjust=False, progress=False)
+        requests.post(url, data=payload)
+    except requests.exceptions.RequestException as e:
+        print(f"Error sending Telegram message: {e}")
+
+# ===============================
+# 📊 ডেটা সংগ্রহ (Data Fetch)
+# ===============================
+def get_data(ticker, interval, start_date=None, end_date=None):
+    # 📢 ইন্ট্রাডে পরিবর্তন: পর্যাপ্ত ডেটা নিশ্চিত করতে period='7d'
+    try:
+        df = yf.download(ticker, interval=interval, period='7d', auto_adjust=False, progress=False) 
         if df is None or df.empty:
             return None
+            
         df = df[['Open','High','Low','Close','Volume']]
         df.columns = ['open','high','low','close','volume']
         df = df.dropna()
@@ -69,311 +102,241 @@ def get_data(ticker, interval, period):
         return None
 
 # ===============================
-# --- ৪. SMC ইন্ডিকেটর এবং ইউটিলিটি ফাংশন ---
+# 🧪 ইন্ডিকেটর ক্যালকুলেশন (Indicators)
 # ===============================
-
 def add_indicators(df):
-    """EMA, ATR, এবং বডি/রেঞ্জ যোগ করে"""
-    df["ema200"] = df["close"].ewm(span=EMA_PERIOD, adjust=False).mean()
+    """ডেটাফ্রেমে EMA(200), MACD, ATR, এবং RSI যোগ করে"""
+    df_copy = df.copy() 
     
-    # ATR ক্যালকুলেশন
-    high_low = df["high"] - df["low"]
-    high_close = np.abs(df["high"] - df["close"].shift())
-    low_close = np.abs(df["low"] - df["close"].shift())
+    # EMA Indicators
+    df_copy["ema200"] = df_copy["close"].ewm(span=EMA_PERIOD, adjust=False).mean()
+    df_copy["ema12"] = df_copy["close"].ewm(span=12, adjust=False).mean()
+    df_copy["ema26"] = df_copy["close"].ewm(span=26, adjust=False).mean()
+    df_copy["macd_line"] = df_copy["ema12"] - df_copy["ema26"]
+    df_copy["macd_signal"] = df_copy["macd_line"].ewm(span=9, adjust=False).mean()
+
+    # ATR Calculation
+    high_low = df_copy["high"] - df_copy["low"]
+    high_close = np.abs(df_copy["high"] - df_copy["close"].shift())
+    low_close = np.abs(df_copy["low"] - df_copy["close"].shift())
     tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-    df["ATR"] = tr.ewm(span=ATR_PERIOD, adjust=False).mean()
+    df_copy["atr"] = tr.ewm(span=ATR_PERIOD, adjust=False).mean()
 
-    df['body'] = (df['close'] - df['open'])
-    df['range'] = (df['high'] - df['low']).abs().replace(0, 0.0000001)
-    return df
+    # RSI Calculation
+    delta = df_copy['close'].diff()
+    gain = (delta.where(delta > 0, 0)).ewm(com=ATR_PERIOD-1, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(com=ATR_PERIOD-1, adjust=False).mean()
+    rs = gain / loss
+    df_copy['rsi'] = 100 - (100 / (1 + rs))
 
-def round_price(p):
-    """দামকে তার মানের উপর ভিত্তি করে রাউন্ড করে"""
-    if p >= 1000: return round(p, 2)
-    elif p >= 10: return round(p, 3)
-    elif p >= 1: return round(p, 4)
-    else: return round(p, 6)
-    
-def find_recent_impulse_and_ob(df_htf):
-    """সাম্প্রতিকতম অর্ডার ব্লক (OB) এবং ইমপালস ক্যান্ডেল খুঁজে বের করে"""
-    d = df_htf.tail(40).copy()
-    if len(d) < 2: return None, None
-    d['abs_body'] = d['body'].abs()
-    
-    # শেষ 5টি ক্যান্ডেলের মধ্যে সবচেয়ে বড় বডি খুঁজে বের করা
-    imp_idx = d.iloc[-5:]['abs_body'].idxmax()
-    
-    try:
-        imp = d.loc[imp_idx]
-        pos = d.index.get_loc(imp_idx)
-        # OB টি অবশ্যই ইমপালস ক্যান্ডেলের ঠিক আগেরটি হতে হবে
-        if pos == 0: return None, None
-        ob = d.iloc[pos - 1]
-        return ob, imp
-    except Exception:
-        return None, None
-
-# --- সংশোধিত FVG লজিক ---
-def detect_fvg(df_htf):
-    """শুধুমাত্র সর্বশেষ 3টি ক্যান্ডেলের FVG সনাক্ত করে (C1 H < C3 L)"""
-    arr = df_htf.tail(3) 
-    if len(arr) < 3: return None, None
-    
-    c1 = arr.iloc[0] # ক্যান্ডেল 1
-    c3 = arr.iloc[2] # ক্যান্ডেল 3
-    
-    # Bullish FVG: C1 High < C3 Low
-    if c1['high'] < c3['low']:
-        # FVG এর জোন: C1 হাই থেকে C3 লো
-        return 'bull', (c1['high'], c3['low']) 
-    
-    # Bearish FVG: C1 Low > C3 High
-    if c1['low'] > c3['high']:
-        # FVG এর জোন: C3 হাই থেকে C1 লো
-        return 'bear', (c3['high'], c1['low']) 
-
-    return None, None
-
-# --- সংশোধিত MSS লজিক ---
-def market_structure_shift(df_htf):
-    """সর্বশেষ সুইং হাই/লো ভাঙা হয়েছে কিনা তা পরীক্ষা করে"""
-    df = df_htf.tail(8) 
-    if len(df) < 8: return None
-    
-    # শেষ 6টি ক্যান্ডেলের মধ্যে সুইং হাই এবং লো সনাক্ত করা 
-    recent_high = df.iloc[-6:-1]['high'].max()
-    recent_low = df.iloc[-6:-1]['low'].min()
-
-    cur = df.iloc[-1] 
-
-    # Bullish MSS: যদি কারেন্ট ক্লোজ সাম্প্রতিক হাই ভেঙ্গে যায়
-    if cur['close'] > recent_high and df.iloc[-2]['close'] < recent_high:
-        return 'bull'
-    
-    # Bearish MSS: যদি কারেন্ট ক্লোজ সাম্প্রতিক লো ভেঙ্গে যায়
-    if cur['close'] < recent_low and df.iloc[-2]['close'] > recent_low:
-        return 'bear'
-        
-    return None
+    return df_copy
 
 # ===============================
-# --- ৫. ডিটেকশন লজিক (SMC) ---
+# 🎯 সিগন্যাল লজিক (Signal Logic)
 # ===============================
-def detect_signal(df_dir, df_entry, coin_name):
+def detect_signal(df_dir_slice, df_entry_slice):
+    """ঐতিহাসিক স্লাইস ডেটার উপর ভিত্তি করে সিগন্যাল সনাক্ত করে (ট্রেন্ড 1h, এন্ট্রি 15m)"""
+    if len(df_dir_slice) < EMA_PERIOD or len(df_entry_slice) < ATR_PERIOD:
+         return None
 
-    df_dir = add_indicators(df_dir)
-    df_entry = add_indicators(df_entry)
+    # 1. ট্রেন্ড নির্ধারণ (1h EMA200)
+    trend = "bull" if df_dir_slice["close"].iloc[-1] > df_dir_slice["ema200"].iloc[-1] else "bear"
     
-    if df_dir.empty or df_entry.empty: return None
+    # 2. OB/Zon রেঞ্জ (শেষ 4টি 1h ক্যান্ডেলের হাই/লো)
+    ob_candles = df_dir_slice.iloc[-5:-1] 
+    ob_high = ob_candles["high"].max()
+    ob_low  = ob_candles["low"].min()
 
-    # ১. ট্রেন্ড (EMA 200 - HTF)
-    trend = "bull" if df_dir["close"].iloc[-1] > df_dir["ema200"].iloc[-1] else "bear"
+    cur = df_entry_slice.iloc[-1]
+    price = cur.close
+    atr_val = cur.atr
+    rsi_val = cur.rsi
     
-    # ২. OB, FVG, MSS ডিটেকশন (HTF)
-    ob_candle, imp_candle = find_recent_impulse_and_ob(df_dir)
-    fvg_side, fvg_zone = detect_fvg(df_dir)
-    ms = market_structure_shift(df_dir)
-    
-    if ob_candle is None or imp_candle is None: return None
-    
-    ob_top = max(ob_candle['open'], ob_candle['high'], ob_candle['close'])
-    ob_bottom = min(ob_candle['open'], ob_candle['low'], ob_candle['close'])
-    ob_zone = (ob_bottom, ob_top)
+    # 3. MACD কনফার্মেশন (1h)
+    macd_line = df_dir_slice["macd_line"].iloc[-1]
+    macd_signal = df_dir_slice["macd_signal"].iloc[-1]
+    macd_bullish = macd_line > macd_signal
+    macd_bearish = macd_line < macd_signal
 
-    cur = df_entry.iloc[-1]
-    price = cur['close']
-    atr = df_entry['ATR'].iloc[-1] if 'ATR' in df_entry.columns and not math.isnan(df_entry['ATR'].iloc[-1]) and df_entry['ATR'].iloc[-1] > 0 else 0.0
-    
-    entry, side, sl, reason = None, None, None, []
-    
-    # ৩. এন্ট্রি লজিক: OB Retest/Rejection (LTF)
-    # শেষ 2টি LTF ক্যান্ডেল চেক
-    recent = df_entry.tail(2) 
-    for idx in reversed(recent.index.tolist()):
-        row = df_entry.loc[idx]
-        # যদি LTF ক্যান্ডেলটি HTF OB জোনকে স্পর্শ করে
-        touched = (row['low'] <= ob_zone[1] and row['high'] >= ob_zone[0])
-        if not touched: continue
-        
-        # রিজেকশন ক্যান্ডেল সনাক্তকরণ (উইক বডির চেয়ে বড়)
-        lower_wick = (row['open'] - row['low']) if row['open'] > row['close'] else (row['close'] - row['low'])
-        upper_wick = (row['high'] - row['open']) if row['open'] > row['close'] else (row['high'] - row['close'])
-        
-        # লং এন্ট্রি: বুলিশ ট্রেন্ড, OB Rejection (নিচের উইক বড়) এবং দাম OB এর উপরে
-        if trend == 'bull' and lower_wick > 0.4 * row['range'] and price > ob_zone[0]:
-            entry = price
-            side = 'long'
-            sl = ob_zone[0] - 0.5 * atr if atr > 0 else entry * 0.995 # ATR ব্যবহার
-            reason.append("OB Retest/Rej")
-            break
-        
-        # শর্ট এন্ট্রি: বিয়ারিশ ট্রেন্ড, OB Rejection (উপরের উইক বড়) এবং দাম OB এর নিচে
-        if trend == 'bear' and upper_wick > 0.4 * row['range'] and price < ob_zone[1]:
-            entry = price
-            side = 'short'
-            sl = ob_zone[1] + 0.5 * atr if atr > 0 else entry * 1.005 # ATR ব্যবহার
-            reason.append("OB Retest/Rej")
-            break
+    sl_distance = atr_val * ATR_MULTIPLIER
+    tp_distance = atr_val * TP_MULTIPLIER
 
-    # ৪. এন্ট্রি লজিক: FVG Fill (যদি OB Retest না পাওয়া যায়)
-    if entry is None and fvg_side and ms:
-        # FVG জোন এবং বর্তমান দাম যদি ওভারল্যাপ করে
-        fvg_touched = (fvg_zone[0] <= price <= fvg_zone[1])
-        
-        # লং এন্ট্রি: FVG বুলিশ, HTF ট্রেন্ড বুলিশ, MSS বুলিশ, এবং FVG টাচ
-        if fvg_side == 'bull' and trend == 'bull' and ms == 'bull' and fvg_touched:
-            entry = price
-            side = 'long'
-            sl = fvg_zone[0] - 0.75 * atr if atr > 0 else entry * 0.995
-            reason.append("FVG Fill + MSS")
-        
-        # শর্ট এন্ট্রি: FVG বিয়ারিশ, HTF ট্রেন্ড বিয়ারিশ, MSS বিয়ারিশ, এবং FVG টাচ
-        if fvg_side == 'bear' and trend == 'bear' and ms == 'bear' and fvg_touched:
-            entry = price
-            side = 'short'
-            sl = fvg_zone[1] + 0.75 * atr if atr > 0 else entry * 1.005
-            reason.append("FVG Fill + MSS")
+    entry, side, sl = None, None, None
 
-    if entry is None: return None
-        
-    # ৫. SL এবং TP ক্যালকুলেশন
+    # Long Entry Condition (ট্রেন্ড আপ, MACD বুলিশ, প্রাইস OB জোনে, RSI > 55)
+    if trend == "bull" and macd_bullish and ob_low <= price <= ob_high and rsi_val > 55:
+        entry = price
+        side = "long"
+        sl = entry - sl_distance
+
+    # Short Entry Condition (ট্রেন্ড ডাউন, MACD বেয়ারিশ, প্রাইস OB জোনে, RSI < 45)
+    if trend == "bear" and macd_bearish and ob_low <= price <= ob_high and rsi_val < 45:
+        entry = price
+        side = "short"
+        sl = entry + sl_distance
+
+    if entry is None:
+        return None
+
+    # SL Fallback (MAX_SL_PCT)
     sl_pct = abs((entry - sl) / entry * 100)
-    # SL খুব বড় বা খুব ছোট হলে বাদ
-    if sl_pct > MAX_SL or sl_pct < 0.1: return None
-
-    # TPs (R:R ভিত্তিতে নয়, ফিক্সড পার্সেন্টেজ, যেহেতু আপনি কোডে TP_PERCENT ব্যবহার করেছেন)
-    tps = []
-    for p in TP_PERCENT:
+    if sl_pct > MAX_SL_PCT:
         if side == "long":
-            tps.append(round_price(entry * (1 + p/100)))
+            sl = entry * (1 - MAX_SL_PCT/100)
         else:
-            tps.append(round_price(entry * (1 - p/100)))
-
-    # নিশ্চিত করুন TP1 কমপক্ষে 1.5 R:R দিচ্ছে (R:R = TP1 দূরত্ব / SL দূরত্ব)
+            sl = entry * (1 + MAX_SL_PCT/100)
+            
     risk_distance = abs(entry - sl)
-    reward1_distance = abs(tps[0] - entry)
-    rr1 = reward1_distance / risk_distance if risk_distance > 0 else 0
-    
-    if rr1 < 1.5: return None 
+    tp1 = entry + tp_distance if side == "long" else entry - tp_distance
+    be_level = entry + risk_distance if side == "long" else entry - risk_distance 
 
     return {
-        "side": side.upper(),
-        "entry": round_price(entry),
-        "sl": round_price(sl),
-        "tps": tps,
-        "trend": trend.upper(),
-        "reason": ", ".join(reason)
+        "side": side,
+        "entry": round(entry,6),
+        "sl": round(sl,6),
+        "tp1": round(tp1, 6),
+        "be_level": round(be_level, 6),
+        "risk_distance": risk_distance
     }
 
+# ----------------------------------------------------
+# 💖 Alive Checker Function
+# ----------------------------------------------------
+def check_and_send_alive_status():
+    """চেক করে যে মনিটর চালু আছে কিনা, এবং প্রতি 24 ঘন্টায় একবার টেলিগ্রামে মেসেজ পাঠায়।"""
+    global LAST_ALIVE_CHECK
+    
+    ALIVE_INTERVAL = 86400 # 24 ঘন্টা = 86400 সেকেন্ড
+    
+    current_time = time.time()
+    
+    if LAST_ALIVE_CHECK is None or (current_time - LAST_ALIVE_CHECK) > ALIVE_INTERVAL:
+        
+        msg = (
+            f"💖 *MONITOR ALIVE CHECK - HEARTBEAT*\n"
+            f"Status: Trading Monitor is running successfully on Render.\n"
+            f"**Intraday Settings:** Trend={TF_DIR}, Entry={TF_ENTRY}\n"
+            f"Active Coins: {', '.join(COINS)}\n"
+            f"Last Check Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S IST')}"
+        )
+        send_telegram_message(msg)
+        
+        LAST_ALIVE_CHECK = current_time
+        print("\n[HEARTBEAT] Alive status sent to Telegram.")
+    else:
+        time_to_next_check = int((ALIVE_INTERVAL - (current_time - LAST_ALIVE_CHECK)) / 3600)
+        print(f"\n[ALIVE] Monitor is running. Next Telegram check in: {time_to_next_check} hours.")
 
 # ===============================
-# --- ৬. ফরম্যাট অ্যালার্ট ---
+# 📣 লাইভ সিগন্যাল মনিটর (LIVE SIGNAL MONITOR)
 # ===============================
-def format_alert(ticker, sig):
-    """HTML ফরম্যাটে অ্যালার্ট মেসেজ তৈরি করে"""
-    emoji = "🔵 LONG" if sig["side"]=="LONG" else "🔴 SHORT"
+def monitor_signals():
+    """নির্দিষ্ট কয়েনগুলির জন্য লাইভ সিগন্যাল চেক করে এবং টেলিগ্রাম অ্যালার্ট পাঠায়"""
     
-    # SL শতাংশ গণনা
-    risk_pct = round(abs(sig['entry'] - sig['sl']) / sig['entry'] * 100, 2)
+    global open_trades
     
-    # R:R গণনা
-    risk = abs(sig['entry'] - sig['sl'])
-    reward1 = abs(sig['tps'][0] - sig['entry'])
-    rr1 = round(reward1 / risk, 2) if risk > 0 else "N/A"
+    check_and_send_alive_status() 
     
-    msg = f"""
-<b>🔥 SMC INTRADAY SIGNAL DETECTED 🔥</b>
-
-PAIR: <b>{ticker}</b> ({TF_DIR}/{TF_ENTRY})
-SIDE: {emoji}
-TREND: {sig['trend']}
-REASON: <b>{sig['reason']}</b>
-
-Entry: <b>{sig['entry']}</b>
-SL: <b>{sig['sl']}</b> (Risk: {risk_pct}%)
-
-TP1 ({TP_PERCENT[0]}%): {sig['tps'][0]} (R:R ~{rr1})
-TP2 ({TP_PERCENT[1]}%): {sig['tps'][1]}
-TP3 ({TP_PERCENT[2]}%): {sig['tps'][2]}
-
-⏳ Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}
-"""
-    return msg, sig['entry']
-
-
-# ===============================
-# --- ৭. TRADING MAIN লুপ ---
-# ===============================
-def main():
-    global LAST_ENTRY_PRICE
+    print(f"\n--- Checking Signals at {datetime.now().strftime('%H:%M:%S')} IST ---")
     
-    # LAST_ENTRY_PRICE ইনিশিয়ালাইজ করা
-    for coin in COINS:
-        LAST_ENTRY_PRICE[coin] = 0.0
+    for ticker in COINS:
+        
+        df_dir = get_data(ticker, TF_DIR)
+        df_entry = get_data(ticker, TF_ENTRY)
 
-    send_telegram(f"🚀 SMC Intraday Bot Started. Checking {len(COINS)} coins every {CHECK_INTERVAL_MIN} min.")
+        if df_dir is None or df_entry is None:
+            continue
 
-    while True:
-        cycle_start = time.time()
+        df_dir = add_indicators(df_dir)
+        df_entry = add_indicators(df_entry)
+        
+        df_dir_slice = df_dir.dropna()
+        df_entry_slice = df_entry.dropna()
+        
+        sig = detect_signal(df_dir_slice, df_entry_slice)
+        
+        # --- (A) নতুন এন্ট্রি সিগন্যাল ---
+        if sig and ticker not in open_trades:
+            
+            # Note: 1:2 R:R লেবেলটি TP_MULTIPLIER=4.0 এবং ATR_MULTIPLIER=2.0 থেকে এসেছে (4.0/2.0 = 2.0)
+            msg = (
+                f"🚀 *NEW INTRADAY ATR SIGNAL - {ticker} ({TF_ENTRY})*\n"
+                f"Direction: {sig['side'].upper()}\n"
+                f"Entry Price: ${sig['entry']:.6f}\n"
+                f"Stop Loss: ${sig['sl']:.6f}\n"
+                f"Target (Approx 2:1 R:R): ${sig['tp1']:.6f}\n"
+                f"BE Level (1:1 R:R): ${sig['be_level']:.6f}"
+            )
+            send_telegram_message(msg)
+            
+            open_trades[ticker] = sig
+            open_trades[ticker]['TF_DIR'] = TF_DIR # মেটাডেটা সেভ করা
+            open_trades[ticker]['TF_ENTRY'] = TF_ENTRY
+            save_open_trades(open_trades) 
+            
+        # --- (B) ট্রেইলিং SL অ্যালার্ট (Break-Even Simulation) ---
+        elif ticker in open_trades:
+            
+            current_price = df_entry.iloc[-1]['close']
+            trade = open_trades[ticker]
+            
+            be_hit = False
+            if trade['side'] == 'long' and current_price >= trade['be_level']:
+                be_hit = True
+            elif trade['side'] == 'short' and current_price <= trade['be_level']:
+                be_hit = True
 
-        for coin in COINS:
-            try:
-                # ডেটা ফেচ
-                df_dir = get_data(coin, TF_DIR, "90d")
-                df_entry = get_data(coin, TF_ENTRY, "30d")
-
-                if df_dir is None or df_entry is None or df_dir.empty or df_entry.empty:
-                    continue
-
-                sig = detect_signal(df_dir, df_entry, coin)
+            if be_hit and trade.get('sl_shift_alert') != True:
                 
-                if sig:
-                    entry_price = sig['entry']
-                    
-                    # ডুপ্লিকেট সিগন্যাল চেক: যদি এন্ট্রি প্রাইস প্রায় একই হয় (0.01% এর কম পার্থক্য)
-                    if abs(entry_price - LAST_ENTRY_PRICE.get(coin, 0.0)) / entry_price * 100 < 0.01:
-                        continue
-
-                    # নতুন সিগন্যাল
-                    msg, entry_key = format_alert(coin, sig)
-                    send_telegram(msg)
-                    LAST_ENTRY_PRICE[coin] = entry_price
-                    print(f"Sent NEW signal for {coin} at {entry_price}. Reason: {sig['reason']}")
-
-            except Exception as e:
-                print("Error processing", coin, e)
-
-        # স্লিভ টাইম গণনা
-        cycle_duration = time.time() - cycle_start
-        sleep_time = max(60, CHECK_INTERVAL_MIN*60 - cycle_duration)
-        print(f"Cycle finished in {round(cycle_duration, 2)}s. Sleeping {int(sleep_time)} sec.")
-        time.sleep(sleep_time)
-
+                msg = (
+                    f"⚠️ *SL SHIFT ALERT - {ticker} ({trade['side'].upper()})*\n"
+                    f"Price hit 1:1 R:R level (${trade['be_level']:.6f}).\n"
+                    f"Please **MOVE STOP LOSS to ENTRY PRICE** (${trade['entry']:.6f}) on your exchange."
+                )
+                send_telegram_message(msg)
+                
+                open_trades[ticker]['sl_shift_alert'] = True
+                save_open_trades(open_trades) 
+                
+        # --- (C) ওপেন ট্রেড চেক (শুধুমাত্র কনসোলে) ---
+        if ticker in open_trades:
+            print(f"Tracking {ticker} | Side: {open_trades[ticker]['side'].upper()} | Entry: {open_trades[ticker]['entry']:.4f}")
 
 # ===============================
-# --- ৮. KEEP-ALIVE WEB SERVER (Flask) ---
+# 🚀 মূল এক্সিকিউশন (MAIN EXECUTION)
 # ===============================
 
+# Flask অ্যাপ তৈরি করা হলো
 app = Flask(__name__)
 
-@app.route('/')
-def home():
-    """স্বাস্থ্য পরীক্ষা (Health Check) এর জন্য একটি সাধারণ উত্তর দেয়"""
-    return "SMC Bot is running!", 200
+@app.route("/")
+def alive_check_route():
+    return f"Trading Monitor (Intraday: {TF_DIR}/{TF_ENTRY}) is Alive!", 200
 
-def run_flask_server():
-    app.run(host='0.0.0.0', port=8080, debug=False)
-
-
-# ===============================
-# --- ৯. স্টার্টিং পয়েন্ট ---
-# ===============================
-if __name__ == "__main__":
-    # ১. Flask সার্ভারটি একটি নতুন থ্রেডে চালু করুন
-    flask_thread = threading.Thread(target=run_flask_server, daemon=True)
-    flask_thread.start()
-    print("Flask Keep-Alive server started.")
-
-    # ২. প্রধান ট্রেডিং লুপটি চালু করুন
-    main()
+def run_monitor():
+    global open_trades
     
+    open_trades = load_open_trades()
+    
+    # 📢 ইন্ট্রাডে পরিবর্তন: প্রতি 15 মিনিটে চেক করা হচ্ছে
+    CHECK_INTERVAL_SECONDS = 900 # 15 মিনিট = 900 সেকেন্ড 
+
+    print("--- Starting Intraday Trading Monitor Loop in Background Thread ---")
+    
+    while True:
+        monitor_signals()
+        print(f"Sleeping for {CHECK_INTERVAL_SECONDS / 60} minutes...")
+        time.sleep(CHECK_INTERVAL_SECONDS)
+
+if __name__ == "__main__":
+    
+    # ব্যাকগ্রাউন্ড থ্রেড শুরু করা হলো
+    monitor_thread = Thread(target=run_monitor)
+    monitor_thread.daemon = True 
+    monitor_thread.start()
+    
+    # Flask অ্যাপ শুরু করা হলো
+    port = int(os.environ.get("PORT", 10000))
+    print(f"Flask app starting on port {port}")
+    app.run(host="0.0.0.0", port=port)
+                
